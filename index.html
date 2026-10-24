@@ -339,13 +339,12 @@
                 </div>
             </div>
 
-            <!-- ACTION LOG PANEL (五十音表の上部にログを表示) -->
+            <!-- ACTION LOG PANEL -->
             <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 space-y-2 shadow-lg">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-2">
                     <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
                         <i class="fa-solid fa-clock-rotate-left"></i> 対戦ログ (直近5件)
                     </span>
-                    <span id="lastActionNotice" class="text-xs font-bold text-amber-400 font-mono"></span>
                 </div>
                 <div id="actionLogList" class="space-y-1.5 max-h-32 overflow-y-auto text-xs md:text-sm text-slate-300 font-medium">
                     <div class="text-slate-500 text-center py-1">ログはまだありません</div>
@@ -428,46 +427,10 @@
 
     <!-- GAME ENGINE & PEERJS ONLINE SCRIPT -->
     <script>
-        const PREFIX = "aiueo-battle-v6-";
+        const PREFIX = "aiueo-battle-v7-";
         const MAX_SLOTS = 7;
 
-        let peer = null, myId = "", myName = "", roomCode = "";
-        let isHost = false;
-        let connections = {}; 
-        let hostConn = null; 
-
-        let roomData = {
-            calledLetters: [],
-            turnOrder: [],
-            currentTurnIndex: 0,
-            pendingCall: null,
-            logs: [], // 行動ログの保存用
-            status: 'LOBBY',
-            players: {}
-        };
-
-        let soundEnabled = true;
-        let currentSetupGroup = 'normal';
-        let mySelectedWord = [];
-
-        const KANA_GROUPS = {
-            'あ': ['あ', 'ぁ'], 'い': ['い', 'ぃ'], 'う': ['う', 'ぅ', 'ゔ'], 'え': ['え', 'ぇ'], 'お': ['お', 'ぉ'],
-            'か': ['か', 'が'], 'き': ['き', 'ぎ'], 'く': ['く', 'ぐ'], 'け': ['け', 'げ'], 'こ': ['こ', 'ご'],
-            'さ': ['さ', 'ざ'], 'し': ['し', 'じ'], 'す': ['す', 'ず'], 'せ': ['せ', 'ぜ'], 'そ': ['そ', 'ぞ'],
-            'た': ['た', 'だ'], 'ち': ['ち', 'ぢ'], 'つ': ['つ', 'づ', 'っ'], 'て': ['て', 'で'], 'と': ['と', 'ど'],
-            'は': ['は', 'ば', 'ぱ'], 'ひ': ['ひ', 'び', 'ぴ'], 'ふ': ['ふ', 'ぶ', 'ぷ'], 'へ': ['へ', 'べ', 'ぺ'], 'ほ': ['ほ', 'ぼ', 'ぽ'],
-            'や': ['や', 'ゃ'], 'ゆ': ['ゆ', 'ゅ'], 'よ': ['よ', 'ょ'], 'わ': ['わ', 'ゎ']
-        };
-
-        function getRelatedKanaList(letter) {
-            for (const rootChar in KANA_GROUPS) {
-                if (KANA_GROUPS[rootChar].includes(letter)) {
-                    return KANA_GROUPS[rootChar];
-                }
-            }
-            return [letter];
-        }
-
+        // 五十音データリストの定義
         const KANA_NORMAL = [
             'あ', 'い', 'う', 'え', 'お',
             'か', 'き', 'く', 'け', 'こ',
@@ -495,6 +458,43 @@
             'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ',
             'っ', 'ゃ', 'ゅ', 'ょ', 'ゎ'
         ];
+
+        const KANA_GROUPS = {
+            'あ': ['あ', 'ぁ'], 'い': ['い', 'ぃ'], 'う': ['う', 'ぅ', 'ゔ'], 'え': ['え', 'ぇ'], 'お': ['お', 'ぉ'],
+            'か': ['か', 'が'], 'き': ['き', 'ぎ'], 'く': ['く', 'ぐ'], 'け': ['け', 'げ'], 'こ': ['こ', 'ご'],
+            'さ': ['さ', 'ざ'], 'し': ['し', 'じ'], 'す': ['す', 'ず'], 'せ': ['せ', 'ぜ'], 'そ': ['そ', 'ぞ'],
+            'た': ['た', 'だ'], 'ち': ['ち', 'ぢ'], 'つ': ['つ', 'づ', 'っ'], 'て': ['て', 'で'], 'と': ['と', 'ど'],
+            'は': ['は', 'ば', 'ぱ'], 'ひ': ['ひ', 'び', 'ぴ'], 'ふ': ['ふ', 'ぶ', 'ぷ'], 'へ': ['へ', 'べ', 'ぺ'], 'ほ': ['ほ', 'ぼ', 'ぽ'],
+            'や': ['や', 'ゃ'], 'ゆ': ['ゆ', 'ゅ'], 'よ': ['よ', 'ょ'], 'わ': ['わ', 'ゎ']
+        };
+
+        function getRelatedKanaList(letter) {
+            for (const rootChar in KANA_GROUPS) {
+                if (KANA_GROUPS[rootChar].includes(letter)) {
+                    return KANA_GROUPS[rootChar];
+                }
+            }
+            return [letter];
+        }
+
+        let peer = null, myId = "", myName = "", roomCode = "";
+        let isHost = false;
+        let connections = {}; 
+        let hostConn = null; 
+
+        let roomData = {
+            calledLetters: [],
+            turnOrder: [],
+            currentTurnIndex: 0,
+            pendingCall: null,
+            logs: [],
+            status: 'LOBBY',
+            players: {}
+        };
+
+        let soundEnabled = true;
+        let currentSetupGroup = 'normal';
+        let mySelectedWord = [];
 
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         let audioCtx = null;
@@ -572,7 +572,6 @@
             return val || 'プレイヤー' + Math.floor(Math.random() * 900 + 100);
         }
 
-        // ログ追加用共通関数
         function addLog(message) {
             if (!roomData.logs) roomData.logs = [];
             roomData.logs.unshift(message);
@@ -811,7 +810,6 @@
                     badge.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 考案中...';
                 }
 
-                // ログエリア描画
                 renderActionLogs();
 
                 const callContainer = document.getElementById('directCallContainer');
@@ -904,7 +902,6 @@
             }
         }
 
-        // 行動ログの描画
         function renderActionLogs() {
             const logList = document.getElementById('actionLogList');
             if (!roomData.logs || roomData.logs.length === 0) {
