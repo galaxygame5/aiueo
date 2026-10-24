@@ -427,10 +427,10 @@
 
     <!-- GAME ENGINE & PEERJS ONLINE SCRIPT -->
     <script>
-        const PREFIX = "aiueo-battle-v7-";
+        const PREFIX = "aiueo-battle-v8-";
         const MAX_SLOTS = 7;
 
-        // 五十音データリストの定義
+        // 五十音定義
         const KANA_NORMAL = [
             'あ', 'い', 'う', 'え', 'お',
             'か', 'き', 'く', 'け', 'こ',
@@ -962,6 +962,7 @@
 
         function renderSetupKanaGrid() {
             const grid = document.getElementById('setupKanaGrid');
+            if (!grid) return;
             grid.innerHTML = '';
 
             let bank = KANA_NORMAL;
@@ -1014,6 +1015,7 @@
         // BATTLE LOGIC
         function renderBattleKanaGrid(isMyTurn) {
             const grid = document.getElementById('battleKanaGrid');
+            if (!grid) return;
             grid.innerHTML = '';
 
             const calledSet = new Set(roomData.calledLetters || []);
@@ -1053,6 +1055,60 @@
                 }
 
                 grid.appendChild(btn);
+            });
+        }
+
+        function renderBattlePlayers() {
+            const container = document.getElementById('battlePlayersContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            Object.values(roomData.players).forEach(p => {
+                const card = document.createElement('div');
+                const isMe = p.id === myId;
+                const isTurn = roomData.turnOrder[roomData.currentTurnIndex] === p.id;
+
+                card.className = `glass-panel p-4 rounded-xl border flex flex-col justify-between space-y-3 transition ${
+                    !p.isAlive ? 'opacity-40 bg-slate-950 border-slate-900' :
+                    isTurn ? 'border-amber-500/80 shadow-lg shadow-amber-500/10' : 'border-slate-800'
+                }`;
+
+                let slotsHtml = '';
+                for (let i = 0; i < MAX_SLOTS; i++) {
+                    const isRevealed = p.revealedIndices.includes(i);
+                    const char = p.word[i];
+
+                    if (isMe) {
+                        if (char) {
+                            if (isRevealed) {
+                                slotsHtml += `<span class="w-8 h-10 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-black flex items-center justify-center text-base">${char}</span>`;
+                            } else {
+                                slotsHtml += `<span class="w-8 h-10 rounded-lg bg-sky-500/20 border border-sky-400/50 text-sky-200 font-black flex items-center justify-center text-base">${char}</span>`;
+                            }
+                        } else {
+                            slotsHtml += `<span class="w-8 h-10 rounded-lg bg-slate-950 border border-slate-900 text-slate-800 font-bold flex items-center justify-center text-xs">-</span>`;
+                        }
+                    } else {
+                        if (isRevealed && char) {
+                            slotsHtml += `<span class="w-8 h-10 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-black flex items-center justify-center text-sm">${char}</span>`;
+                        } else {
+                            slotsHtml += `<span class="w-8 h-10 rounded-lg bg-slate-900 border border-slate-800 text-slate-600 font-bold flex items-center justify-center text-sm">?</span>`;
+                        }
+                    }
+                }
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-slate-800/80 pb-2">
+                        <span class="font-bold text-sm text-slate-200 truncate max-w-[140px]">
+                            ${escapeHtml(p.name)} ${isMe ? '(自分)' : ''}
+                        </span>
+                        ${!p.isAlive ? '<span class="text-xs font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">脱落</span>' : ''}
+                    </div>
+                    <div class="flex justify-center items-center gap-1.5 my-1 overflow-x-auto">
+                        ${slotsHtml}
+                    </div>
+                `;
+                container.appendChild(card);
             });
         }
 
@@ -1228,6 +1284,12 @@
             if (!str) return '';
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         }
+
+        // 初期ロード時に五十音表を必ず初期化・描画
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSetupKanaGrid();
+            renderWordSlots();
+        });
     </script>
 </body>
 </html>
