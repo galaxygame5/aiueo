@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>あいうえバトル Online</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- PeerJS for P2P Online -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Zen+Maru+Gothic:wght@500;700;900&display=swap');
+        
+        body {
+            font-family: 'Zen Maru Gothic', 'Plus Jakarta Sans', sans-serif;
+            background-color: #090d16;
+            color: #f8fafc;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.3);
+            border-radius: 9999px;
+        }
+
+        .kana-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+
+        .kana-btn {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            border-radius: 0.75rem;
+            transition: all 0.15s ease;
+            position: relative;
+            font-size: 1.5rem;
+        }
+
+        @media (min-width: 640px) {
+            .kana-btn {
+                font-size: 1.8rem;
+            }
+        }
+
+        .kana-btn:active {
+            transform: scale(0.92);
+        }
+
+        .kana-destroyed {
+            background-color: #1e1b4b !important;
+            color: #64748b !important;
+            border: 1px solid #312e81 !important;
+            text-decoration: line-through;
+            opacity: 0.6;
+            cursor: not-allowed !important;
+        }
+
+        .kana-destroyed::after {
+            content: "✕";
+            position: absolute;
+            top: 2px;
+            right: 6px;
+            font-size: 0.85rem;
+            color: #f43f5e;
+            text-decoration: none;
+            font-weight: 900;
+        }
+
+        .kana-my-word {
+            box-shadow: 0 0 0 3px #38bdf8 inset !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between overflow-x-hidden">
+
+    <!-- Header / Navbar -->
+    <header class="w-full p-4 md:p-5 glass-panel sticky top-0 z-40 border-b border-slate-800 flex justify-between items-center">
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="location.reload()">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/30">
+                <span class="text-3xl font-black text-white">あ</span>
+            </div>
+            <div>
+                <h1 class="font-extrabold text-2xl tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-sky-400 via-indigo-300 to-pink-400">
+                    あいうえバトル
+                </h1>
+                <p class="text-xs text-slate-400 font-mono tracking-widest uppercase">Aiueo Battle Online</p>
+            </div>
+        </div>
+
+        <div id="headerInfo" class="hidden flex items-center space-x-3">
+            <div id="roomBadge" class="bg-slate-900 border border-slate-700 px-4 py-2 rounded-full text-sm font-mono font-bold text-sky-400 flex items-center gap-2 cursor-pointer hover:bg-slate-800 transition" onclick="copyRoomCode()">
+                <i class="fa-regular fa-copy"></i>
+                <span id="displayRoomCode">----</span>
+            </div>
+            <button id="soundToggleBtn" onclick="toggleSound()" class="w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 text-lg transition">
+                <i class="fa-solid fa-volume-high" id="soundIcon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="container mx-auto px-4 py-6 max-w-2xl flex-grow flex flex-col justify-center">
+
+        <!-- VIEW 1: LOBBY & INITIAL SETUP -->
+        <div id="viewLobby" class="space-y-6">
+            <div class="text-center space-y-3 my-2">
+                <div class="inline-block px-4 py-1.5 bg-sky-500/10 text-sky-400 rounded-full text-sm font-bold border border-sky-500/20 mb-1">
+                    50音表で遊ぶワード対戦ゲーム
+                </div>
+                <h2 class="text-3xl md:text-4xl font-black text-white">相手のお題の言葉を当てろ！</h2>
+                <p class="text-slate-400 text-sm md:text-base max-w-lg mx-auto">
+                    五十音表を交互に攻撃！自分の単語を隠し通し、相手の単語の文字をすべてオープンさせて生き残ろう！
+                </p>
+            </div>
+
+            <!-- User Name Card -->
+            <div class="glass-panel rounded-2xl p-6 shadow-xl space-y-3">
+                <label class="block text-sm font-bold uppercase tracking-wider text-slate-300">プレイヤー名（ニックネーム）</label>
+                <div class="relative">
+                    <input type="text" id="playerNameInput" maxlength="8" placeholder="名前を入力してください" 
+                        class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-5 py-4 text-white focus:outline-none focus:border-sky-500 transition font-bold text-xl">
+                </div>
+            </div>
+
+            <!-- Room Code Card -->
+            <div class="glass-panel rounded-2xl p-6 shadow-xl space-y-3">
+                <label class="block text-sm font-bold uppercase tracking-wider text-slate-300">合言葉（部屋のパスワード）</label>
+                <div class="relative">
+                    <input type="text" id="joinRoomCodeInput" placeholder="お好きな合言葉を入力 (例: room123)" 
+                        class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-5 py-4 text-white font-mono tracking-widest text-xl focus:outline-none focus:border-indigo-500 transition">
+                </div>
+                <p class="text-xs text-slate-400">※ホストもゲストも同じ合言葉を入力してボタンを押してください。</p>
+            </div>
+
+            <!-- Create / Join Buttons -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Create Room Card -->
+                <div class="glass-panel rounded-2xl p-6 shadow-xl hover:border-sky-500/50 transition flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="w-12 h-12 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center text-2xl mb-2">
+                            <i class="fa-solid fa-plus"></i>
+                        </div>
+                        <h3 class="font-bold text-xl text-white">部屋を作る (ホスト)</h3>
+                        <p class="text-xs text-slate-400 mt-1">入力した合言葉で部屋を作成します。</p>
+                    </div>
+                    <button onclick="createRoom()" class="w-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-extrabold text-lg py-4 rounded-xl shadow-lg shadow-sky-600/30 transition transform active:scale-95">
+                        部屋を作成
+                    </button>
+                </div>
+
+                <!-- Join Room Card -->
+                <div class="glass-panel rounded-2xl p-6 shadow-xl hover:border-indigo-500/50 transition flex flex-col justify-between space-y-4">
+                    <div>
+                        <div class="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-2xl mb-2">
+                            <i class="fa-solid fa-right-to-bracket"></i>
+                        </div>
+                        <h3 class="font-bold text-xl text-white">部屋に入る (ゲスト)</h3>
+                        <p class="text-xs text-slate-400 mt-1">ホストの合言葉で参加します。</p>
+                    </div>
+                    <button onclick="joinRoom()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-lg py-4 rounded-xl shadow-lg shadow-indigo-600/30 transition transform active:scale-95">
+                        部屋に参加
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: ROOM WAITING LOBBY -->
+        <div id="viewRoomLobby" class="hidden space-y-5">
+            <div class="glass-panel rounded-2xl p-6 md:p-8 shadow-xl space-y-6">
+                <!-- Room Header -->
+                <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+                    <div>
+                        <span class="text-xs font-bold text-sky-400 tracking-wider uppercase">LOBBY ROOM</span>
+                        <h2 class="text-3xl font-black text-white flex items-center gap-2">
+                            合言葉: <span id="lobbyRoomCode" class="font-mono text-amber-400">----</span>
+                        </h2>
+                    </div>
+                    <button onclick="copyRoomCode()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold px-4 py-2.5 rounded-xl border border-slate-700 flex items-center gap-2 transition">
+                        <i class="fa-regular fa-copy"></i>
+                        合言葉をコピー
+                    </button>
+                </div>
+
+                <!-- Info Message -->
+                <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-800 text-center text-sm text-slate-300">
+                    お題の文字数: <strong class="text-amber-400 font-bold text-base">1〜10文字（自由指定・相手には隠されます）</strong>
+                </div>
+
+                <!-- Players List -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center text-sm font-bold text-slate-300">
+                        <span>参加プレイヤー (<span id="playerCount">0</span>/8名)</span>
+                        <span class="text-slate-400">※2〜8人で対戦可能</span>
+                    </div>
+                    <div id="playerList" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
+                        <!-- Dynamically Filled -->
+                    </div>
+                </div>
+
+                <!-- Start Action -->
+                <div class="pt-2">
+                    <button id="startGameBtn" onclick="startSetupPhase()" class="hidden w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xl py-5 rounded-xl shadow-lg shadow-emerald-600/30 transition transform active:scale-95">
+                        お題決めフェイズへ進む 🚀
+                    </button>
+                    <p id="waitingForHostMsg" class="text-center text-slate-400 text-sm py-2 font-medium animate-pulse">
+                        ホストが対戦を開始するのを待っています...
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: WORD SETUP PHASE -->
+        <div id="viewWordSetup" class="hidden space-y-5">
+            <div class="glass-panel rounded-2xl p-6 md:p-8 shadow-xl space-y-5">
+                <div class="text-center space-y-1">
+                    <span class="text-xs font-bold text-amber-400 tracking-wider uppercase">SETUP PHASE</span>
+                    <h3 class="text-2xl font-black text-white">あなたの【秘密の単語】を決めてください</h3>
+                    <p class="text-xs sm:text-sm text-slate-400">あいうえお表から <span class="text-sky-400 font-bold">1〜10文字</span> の単語を作成！（文字数は相手に隠されます）</p>
+                </div>
+
+                <!-- Word Display Slots -->
+                <div class="flex justify-center items-center space-x-2 py-2 overflow-x-auto">
+                    <div id="wordSlotsContainer" class="flex space-x-1.5 sm:space-x-2 overflow-x-auto py-1 max-w-full">
+                        <!-- Populated by JS -->
+                    </div>
+                    <button onclick="clearSetupWord()" class="w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 flex items-center justify-center text-lg transition border border-slate-700 ml-1 flex-shrink-0">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                </div>
+
+                <!-- Modifier Switcher -->
+                <div class="flex bg-slate-900/90 p-1.5 rounded-xl border border-slate-800 text-sm font-bold gap-1.5">
+                    <button id="modNormalBtn" onclick="switchKanaGroup('normal')" class="flex-1 py-2 rounded-lg transition bg-sky-600 text-white">清音</button>
+                    <button id="modDakuBtn" onclick="switchKanaGroup('daku')" class="flex-1 py-2 rounded-lg transition text-slate-400 hover:text-white">濁点 (゛)</button>
+                    <button id="modHandakuBtn" onclick="switchKanaGroup('handaku')" class="flex-1 py-2 rounded-lg transition text-slate-400 hover:text-white">半濁点 (゜)</button>
+                    <button id="modSmallBtn" onclick="switchKanaGroup('small')" class="flex-1 py-2 rounded-lg transition text-slate-400 hover:text-white">小文字</button>
+                </div>
+
+                <!-- 50-ON SELECTOR GRID -->
+                <div id="setupKanaGrid" class="kana-grid bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                    <!-- Dynamic 50-on Keys -->
+                </div>
+
+                <!-- Submit Button -->
+                <button id="submitWordBtn" disabled onclick="submitTargetWord()" class="w-full bg-slate-800 text-slate-500 font-extrabold text-xl py-4 rounded-xl transition cursor-not-allowed">
+                    1文字以上選択してください
+                </button>
+
+                <p id="setupWaitingNotice" class="hidden text-center text-sm text-sky-400 font-bold animate-pulse py-2">
+                    <i class="fa-solid fa-circle-check"></i> 単語を登録しました！他のプレイヤーの準備を待っています...
+                </p>
+            </div>
+        </div>
+
+        <!-- VIEW 4: BATTLE PHASE (MAIN GAMEPLAY) -->
+        <div id="viewBattle" class="hidden space-y-5">
+            
+            <!-- Turn Banner Header -->
+            <div id="turnBanner" class="glass-panel p-4 rounded-2xl shadow-xl flex items-center justify-between border border-slate-700">
+                <div class="flex items-center space-x-4">
+                    <div id="turnAvatar" class="w-12 h-12 rounded-xl bg-amber-500 text-slate-950 font-black flex items-center justify-center text-2xl shadow-md shadow-amber-500/20">
+                        ?
+                    </div>
+                    <div>
+                        <span class="text-xs text-slate-400 font-bold block uppercase tracking-wider">現在のターン (親)</span>
+                        <h4 id="turnPlayerName" class="text-lg md:text-xl font-black text-white">----</h4>
+                    </div>
+                </div>
+
+                <div id="turnStatusBadge" class="px-4 py-2 rounded-full text-xs md:text-sm font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-2 animate-pulse">
+                    <i class="fa-solid fa-hourglass-half"></i> 考案中...
+                </div>
+            </div>
+
+            <!-- Direct Call Attack Panel -->
+            <div id="directCallContainer" class="hidden glass-panel p-4 rounded-2xl border border-rose-500/40 bg-rose-950/20 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-bold text-rose-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-crosshair text-base"></i> お題を直接指名攻撃！
+                    </span>
+                    <span class="text-xs text-slate-400">口頭等で当てた時に指名</span>
+                </div>
+                <div id="directCallButtons" class="flex flex-wrap gap-2">
+                    <!-- 生き残っている相手を指名するボタン群 -->
+                </div>
+            </div>
+
+            <!-- Players Cards Grid (拡大対応版UI) -->
+            <div class="space-y-2">
+                <div class="flex justify-between items-center text-xs font-bold text-slate-400 px-1">
+                    <span>各プレイヤーの単語状況 (一律10マス表示)</span>
+                </div>
+
+                <div id="battlePlayersContainer" class="grid grid-cols-1 gap-3">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- ACTION LOG PANEL -->
+            <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 space-y-2 shadow-lg">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-clock-rotate-left"></i> 対戦ログ (直近5件)
+                    </span>
+                </div>
+                <div id="actionLogList" class="space-y-1.5 max-h-32 overflow-y-auto text-xs md:text-sm text-slate-300 font-medium">
+                    <div class="text-slate-500 text-center py-1">ログはまだありません</div>
+                </div>
+            </div>
+
+            <!-- MAIN 50-ON ATTACK BOARD -->
+            <div class="glass-panel rounded-2xl p-5 shadow-2xl space-y-4">
+                <div>
+                    <h4 class="text-base font-extrabold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-border-all text-sky-400"></i> 五十音対戦盤面
+                    </h4>
+                    <p class="text-xs text-slate-400">文字を選択して攻撃！濁点や小文字も自動で開きます。</p>
+                </div>
+
+                <!-- 50-ON BATTLE GRID -->
+                <div id="battleKanaGrid" class="kana-grid bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                    <!-- Dynamic Battle Keys -->
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 5: GAME OVER / RESULT -->
+        <div id="viewGameOver" class="hidden glass-panel rounded-2xl p-8 md:p-10 shadow-2xl text-center space-y-6">
+            <div id="resultBanner" class="py-2 space-y-2">
+                <!-- Winner Banner -->
+            </div>
+
+            <!-- All Players Word Reveal -->
+            <div class="space-y-3 bg-slate-900/80 p-5 rounded-2xl border border-slate-800 text-left">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider text-center">全員の単語結果</h4>
+                <div id="finalWordsList" class="space-y-3">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <!-- Play Again Controls -->
+            <div id="gameOverHostControls" class="hidden space-y-2 pt-2">
+                <button onclick="restartGame()" class="w-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-extrabold text-xl py-5 rounded-xl shadow-lg transition transform active:scale-95">
+                    もう一度遊ぶ 🔄
+                </button>
+            </div>
+            <p id="gameOverClientMsg" class="hidden text-sm text-slate-400 animate-pulse">
+                ホストが次のゲームを準備中です...
+            </p>
+        </div>
+
+    </main>
+
+    <!-- MODAL: 指名判定ポップアップ -->
+    <div id="callJudgeModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div class="glass-panel max-w-md w-full rounded-2xl p-6 md:p-8 border-2 border-rose-500 shadow-2xl text-center space-y-6">
+            <div class="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center text-3xl mx-auto border border-rose-500/40">
+                🎯
+            </div>
+            <div>
+                <h3 class="text-xl font-black text-white">あなたのお題が指名コールされました！</h3>
+                <p class="text-sm text-slate-300 mt-2">
+                    <span id="judgeAttackerName" class="font-bold text-amber-400 text-lg">----</span> さんがコールした単語は正解ですか？
+                </p>
+                <div class="mt-4 p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-sm">
+                    あなたの単語: <span id="judgeMyWord" class="font-bold text-sky-300 text-lg"></span>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="answerCallJudge(true)" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold py-4 rounded-xl shadow-lg transition transform active:scale-95 text-base">
+                    ⭕ 正解！(脱落)
+                </button>
+                <button onclick="answerCallJudge(false)" class="bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-extrabold py-4 rounded-xl shadow-lg transition transform active:scale-95 text-base">
+                    ❌ 不正解！
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="p-4 text-center text-xs text-slate-500 border-t border-slate-900">
+        &copy; あいうえバトル Online - Realtime Word Battle
+    </footer>
+
+    <!-- GAME ENGINE & PEERJS ONLINE SCRIPT -->
+    <script>
+        const PREFIX = "aiueo-battle-v9-";
+        const MAX_SLOTS = 10; // 最大文字数を10文字に変更
+
+        // 五十音定義
+        const KANA_NORMAL = [
+            'あ', 'い', 'う', 'え', 'お',
+            'か', 'き', 'く', 'け', 'こ',
+            'さ', 'し', 'す', 'せ', 'そ',
+            'た', 'ち', 'つ', 'て', 'と',
+            'な', 'に', 'ぬ', 'ね', 'の',
+            'は', 'ひ', 'ふ', 'へ', 'ほ',
+            'ま', 'み', 'む', 'め', 'も',
+            'や', 'ゆ', 'よ', 'ら', 'り',
+            'る', 'れ', 'ろ', 'わ', 'ん', 'ー'
+        ];
+
+        const KANA_DAKU = [
+            'が', 'ぎ', 'ぐ', 'げ', 'ご',
+            'ざ', 'じ', 'ず', 'ぜ', 'ぞ',
+            'だ', 'ぢ', 'づ', 'で', 'ど',
+            'ば', 'び', 'ぶ', 'べ', 'ぼ'
+        ];
+
+        const KANA_HANDAKU = [
+            'ぱ', 'ぴ', 'ぷ', 'ぺ', 'ぽ'
+        ];
+
+        const KANA_SMALL = [
+            'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ',
+            'っ', 'ゃ', 'ゅ', 'ょ', 'ゎ'
+        ];
+
+        const KANA_GROUPS = {
+            'あ': ['あ', 'ぁ'], 'い': ['い', 'ぃ'], 'う': ['う', 'ぅ', 'ゔ'], 'え': ['え', 'ぇ'], 'お': ['お', 'ぉ'],
+            'か': ['か', 'が'], 'き': ['き', 'ぎ'], 'く': ['く', 'ぐ'], 'け': ['け', 'げ'], 'こ': ['こ', 'ご'],
+            'さ': ['さ', 'ざ'], 'し': ['し', 'じ'], 'す': ['す', 'ず'], 'せ': ['せ', 'ぜ'], 'そ': ['そ', 'ぞ'],
+            'た': ['た', 'だ'], 'ち': ['ち', 'ぢ'], 'つ': ['つ', 'づ', 'っ'], 'て': ['て', 'で'], 'と': ['と', 'ど'],
+            'は': ['は', 'ば', 'ぱ'], 'ひ': ['ひ', 'び', 'ぴ'], 'ふ': ['ふ', 'ぶ', 'ぷ'], 'へ': ['へ', 'べ', 'ぺ'], 'ほ': ['ほ', 'ぼ', 'ぽ'],
+            'や': ['や', 'ゃ'], 'ゆ': ['ゆ', 'ゅ'], 'よ': ['よ', 'ょ'], 'わ': ['わ', 'ゎ']
+        };
+
+        function getRelatedKanaList(letter) {
+            for (const rootChar in KANA_GROUPS) {
+                if (KANA_GROUPS[rootChar].includes(letter)) {
+                    return KANA_GROUPS[rootChar];
+                }
+            }
+            return [letter];
+        }
+
+        let peer = null, myId = "", myName = "", roomCode = "";
+        let isHost = false;
+        let connections = {}; 
+        let hostConn = null; 
+
+        let roomData = {
+            calledLetters: [],
+            turnOrder: [],
+            currentTurnIndex: 0,
+            pendingCall: null,
+            logs: [],
+            status: 'LOBBY',
+            players: {}
+        };
+
+        let soundEnabled = true;
+        let currentSetupGroup = 'normal';
+        let mySelectedWord = [];
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            try {
+                if (!audioCtx) audioCtx = new AudioCtx();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'tap') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(450, now);
+                    gain.gain.setValueAtTime(0.08, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'hit') {
+                    [523.25, 659.25, 783.99].forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.frequency.setValueAtTime(freq, now + i * 0.06);
+                        g.gain.setValueAtTime(0.1, now + i * 0.06);
+                        g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.06 + 0.15);
+                        o.start(now + i * 0.06);
+                        o.stop(now + i * 0.06 + 0.15);
+                    });
+                } else if (type === 'eliminate') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(100, now + 0.3);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'victory') {
+                    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.frequency.setValueAtTime(freq, now + i * 0.1);
+                        g.gain.setValueAtTime(0.15, now + i * 0.1);
+                        g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.1 + 0.25);
+                        o.start(now + i * 0.1);
+                        o.stop(now + i * 0.1 + 0.25);
+                    });
+                }
+            } catch (e) {
+                console.warn("Audio exception:", e);
+            }
+        }
+
+        function showView(viewId) {
+            ['viewLobby', 'viewRoomLobby', 'viewWordSetup', 'viewBattle', 'viewGameOver'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(viewId).classList.remove('hidden');
+
+            const headerInfo = document.getElementById('headerInfo');
+            if (viewId !== 'viewLobby') headerInfo.classList.remove('hidden');
+            else headerInfo.classList.add('hidden');
+        }
+
+        function getPlayerName() {
+            const val = document.getElementById('playerNameInput').value.trim();
+            return val || 'プレイヤー' + Math.floor(Math.random() * 900 + 100);
+        }
+
+        function addLog(message) {
+            if (!roomData.logs) roomData.logs = [];
+            roomData.logs.unshift(message);
+            if (roomData.logs.length > 15) roomData.logs.pop();
+        }
+
+        // CREATE ROOM (HOST)
+        function createRoom() {
+            playSound('tap');
+            myName = getPlayerName();
+            roomCode = document.getElementById('joinRoomCodeInput').value.trim().toLowerCase();
+            if (!roomCode) {
+                alert("合言葉（部屋のパスワード）を入力してください");
+                return;
+            }
+
+            isHost = true;
+            const peerId = `${PREFIX}${roomCode}-host`;
+            peer = new Peer(peerId);
+
+            peer.on('open', (id) => {
+                myId = id;
+                roomData.hostId = myId;
+                roomData.players = {
+                    [myId]: {
+                        id: myId,
+                        name: myName,
+                        isHost: true,
+                        word: [],
+                        revealedIndices: [],
+                        isAlive: true,
+                        isReady: false
+                    }
+                };
+                roomData.turnOrder = [myId];
+                roomData.logs = [];
+                
+                setupLobbyUI();
+                renderRoomState();
+            });
+
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    alert("その合言葉はすでに他のホストが使用中です。別の合言葉にしてください。");
+                } else {
+                    alert("接続エラーが発生しました: " + err.type);
+                }
+            });
+
+            peer.on('connection', (conn) => {
+                conn.on('open', () => {
+                    conn.on('data', (data) => handleHostData(conn, data));
+                });
+                conn.on('close', () => {
+                    delete connections[conn.peer];
+                    delete roomData.players[conn.peer];
+                    roomData.turnOrder = roomData.turnOrder.filter(id => id !== conn.peer);
+                    broadcastState();
+                });
+            });
+        }
+
+        // JOIN ROOM (GUEST)
+        function joinRoom() {
+            playSound('tap');
+            myName = getPlayerName();
+            roomCode = document.getElementById('joinRoomCodeInput').value.trim().toLowerCase();
+            if (!roomCode) {
+                alert("合言葉（部屋のパスワード）を入力してください");
+                return;
+            }
+
+            isHost = false;
+            const hostPeerId = `${PREFIX}${roomCode}-host`;
+            peer = new Peer();
+
+            peer.on('open', (id) => {
+                myId = id;
+                hostConn = peer.connect(hostPeerId);
+
+                hostConn.on('open', () => {
+                    hostConn.send({ type: 'JOIN', id: myId, name: myName });
+                    setupLobbyUI();
+                });
+
+                hostConn.on('data', (data) => handleClientData(data));
+            });
+
+            peer.on('error', () => {
+                alert("部屋が見つかりませんでした。合言葉が正しいか確認してください。");
+            });
+        }
+
+        function setupLobbyUI() {
+            document.getElementById('displayRoomCode').innerText = roomCode;
+            document.getElementById('lobbyRoomCode').innerText = roomCode;
+            showView('viewRoomLobby');
+        }
+
+        function broadcastState() {
+            if (!isHost) return;
+            Object.values(connections).forEach(c => c.send({ type: 'SYNC_STATE', roomData }));
+            renderRoomState();
+        }
+
+        function handleHostData(conn, data) {
+            if (data.type === 'JOIN') {
+                if (roomData.status !== 'LOBBY') {
+                    conn.send({ type: 'ERROR', message: 'ゲームはすでに進行中です' });
+                    return;
+                }
+                connections[conn.peer] = conn;
+                roomData.players[data.id] = {
+                    id: data.id,
+                    name: data.name,
+                    isHost: false,
+                    word: [],
+                    revealedIndices: [],
+                    isAlive: true,
+                    isReady: false
+                };
+                if (!roomData.turnOrder.includes(data.id)) {
+                    roomData.turnOrder.push(data.id);
+                }
+                broadcastState();
+            } else if (data.type === 'SUBMIT_WORD') {
+                roomData.players[data.id].word = data.word;
+                roomData.players[data.id].isReady = true;
+
+                const allReady = Object.values(roomData.players).every(p => p.isReady);
+                if (allReady) {
+                    roomData.status = 'BATTLE';
+                    // 親（スタートプレイヤー）をランダムに選出
+                    roomData.currentTurnIndex = Math.floor(Math.random() * roomData.turnOrder.length);
+                    const startPlayer = roomData.players[roomData.turnOrder[roomData.currentTurnIndex]];
+                    addLog(`対戦スタート！ 最初の親は [ ${startPlayer ? startPlayer.name : ''} ] です！`);
+                }
+                broadcastState();
+            } else if (data.type === 'ATTACK_LETTER') {
+                processAttack(data.letter);
+            } else if (data.type === 'DIRECT_CALL') {
+                processDirectCall(data.attackerId, data.targetId);
+            } else if (data.type === 'ANSWER_CALL') {
+                processCallAnswer(data.targetId, data.isCorrect);
+            } else if (data.type === 'RESTART') {
+                resetGameToLobby();
+            }
+        }
+
+        function handleClientData(data) {
+            if (data.type === 'SYNC_STATE') {
+                roomData = data.roomData;
+                renderRoomState();
+            } else if (data.type === 'ERROR') {
+                alert(data.message);
+            }
+        }
+
+        // --- GAME ACTIONS & RENDER LOGIC ---
+
+        function renderRoomState() {
+            if (!roomData) return;
+
+            const isHostUser = roomData.hostId === myId;
+            const myPlayer = roomData.players[myId];
+
+            if (roomData.status === 'LOBBY') {
+                showView('viewRoomLobby');
+
+                const startBtn = document.getElementById('startGameBtn');
+                const waitingMsg = document.getElementById('waitingForHostMsg');
+
+                if (isHostUser) {
+                    startBtn.classList.remove('hidden');
+                    waitingMsg.classList.add('hidden');
+                } else {
+                    startBtn.classList.add('hidden');
+                    waitingMsg.classList.remove('hidden');
+                }
+
+                const playerList = document.getElementById('playerList');
+                playerList.innerHTML = '';
+                const playersArray = Object.values(roomData.players);
+                document.getElementById('playerCount').innerText = playersArray.length;
+
+                playersArray.forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = "flex items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-xl";
+                    div.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-full bg-sky-600/30 text-sky-300 font-bold flex items-center justify-center text-base border border-sky-500/30">
+                                ${escapeHtml(p.name.charAt(0))}
+                            </div>
+                            <span class="font-bold text-base text-slate-200">${escapeHtml(p.name)}</span>
+                        </div>
+                        ${p.isHost ? '<span class="text-xs font-bold bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full border border-amber-500/30">ホスト</span>' : ''}
+                    `;
+                    playerList.appendChild(div);
+                });
+
+            } else if (roomData.status === 'SETUP') {
+                showView('viewWordSetup');
+
+                renderWordSlots();
+                renderSetupKanaGrid();
+
+                const setupNotice = document.getElementById('setupWaitingNotice');
+                const submitBtn = document.getElementById('submitWordBtn');
+
+                if (myPlayer && myPlayer.isReady) {
+                    setupNotice.classList.remove('hidden');
+                    submitBtn.classList.add('hidden');
+                } else {
+                    setupNotice.classList.add('hidden');
+                    submitBtn.classList.remove('hidden');
+                }
+
+            } else if (roomData.status === 'BATTLE') {
+                showView('viewBattle');
+
+                const currentTurnPlayerId = roomData.turnOrder[roomData.currentTurnIndex];
+                const currentTurnPlayer = roomData.players[currentTurnPlayerId];
+                const isMyTurn = currentTurnPlayerId === myId;
+
+                document.getElementById('turnAvatar').innerText = currentTurnPlayer ? currentTurnPlayer.name.charAt(0) : '?';
+                document.getElementById('turnPlayerName').innerText = currentTurnPlayer ? currentTurnPlayer.name : '----';
+
+                const badge = document.getElementById('turnStatusBadge');
+                
+                if (roomData.pendingCall) {
+                    badge.className = "px-4 py-2 rounded-full text-xs md:text-sm font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-2 animate-pulse";
+                    badge.innerHTML = `<i class="fa-solid fa-crosshair"></i> 指名コール判定中…`;
+                } else if (isMyTurn) {
+                    badge.className = "px-4 py-2 rounded-full text-xs md:text-sm font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-2 animate-pulse";
+                    badge.innerHTML = '<i class="fa-solid fa-crosshair"></i> あなたの番です！';
+                } else {
+                    badge.className = "px-4 py-2 rounded-full text-xs md:text-sm font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-2";
+                    badge.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 考案中...';
+                }
+
+                renderActionLogs();
+
+                const callContainer = document.getElementById('directCallContainer');
+                const callBtns = document.getElementById('directCallButtons');
+                
+                if (isMyTurn && !roomData.pendingCall) {
+                    callContainer.classList.remove('hidden');
+                    callBtns.innerHTML = '';
+                    Object.values(roomData.players).forEach(p => {
+                        if (p.id !== myId && p.isAlive) {
+                            const btn = document.createElement('button');
+                            btn.className = "bg-rose-600/80 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition active:scale-95";
+                            btn.innerText = `🎯 ${p.name} を指名`;
+                            btn.onclick = () => sendDirectCall(p.id);
+                            callBtns.appendChild(btn);
+                        }
+                    });
+                } else {
+                    callContainer.classList.add('hidden');
+                }
+
+                const modal = document.getElementById('callJudgeModal');
+                if (roomData.pendingCall && roomData.pendingCall.targetId === myId) {
+                    const attacker = roomData.players[roomData.pendingCall.attackerId];
+                    document.getElementById('judgeAttackerName').innerText = attacker ? attacker.name : '----';
+                    document.getElementById('judgeMyWord').innerText = myPlayer ? myPlayer.word.join('') : '';
+                    modal.classList.remove('hidden');
+                } else {
+                    modal.classList.add('hidden');
+                }
+
+                renderBattlePlayers();
+                renderBattleKanaGrid(isMyTurn && !roomData.pendingCall);
+
+            } else if (roomData.status === 'GAMEOVER') {
+                showView('viewGameOver');
+                document.getElementById('callJudgeModal').classList.add('hidden');
+
+                const banner = document.getElementById('resultBanner');
+                const winnerPlayer = roomData.players[roomData.winnerId];
+                const isWinnerMe = roomData.winnerId === myId;
+
+                if (isWinnerMe) {
+                    playSound('victory');
+                    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+                    banner.innerHTML = `
+                        <div class="w-20 h-20 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-4xl mx-auto mb-2 border border-amber-500/30">
+                            🏆
+                        </div>
+                        <h2 class="text-4xl font-black text-amber-400">見事に勝利！！</h2>
+                        <p class="text-sm text-slate-400">あなたの単語を守り抜き、最後の生き残りに輝きました！</p>
+                    `;
+                } else {
+                    playSound('eliminate');
+                    banner.innerHTML = `
+                        <div class="w-20 h-20 rounded-2xl bg-sky-500/20 text-sky-400 flex items-center justify-center text-4xl mx-auto mb-2 border border-sky-500/30">
+                            👑
+                        </div>
+                        <h2 class="text-4xl font-black text-sky-400">${escapeHtml(winnerPlayer ? winnerPlayer.name : '勝者')} の勝利！</h2>
+                        <p class="text-sm text-slate-400">単語を最後まで隠し通しました！</p>
+                    `;
+                }
+
+                const wordsList = document.getElementById('finalWordsList');
+                wordsList.innerHTML = '';
+
+                Object.values(roomData.players).forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center bg-slate-950 p-4 rounded-xl border border-slate-800";
+                    div.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <span class="font-bold text-slate-200 text-base">${escapeHtml(p.name)}</span>
+                            ${!p.isAlive ? '<span class="text-xs bg-rose-500/20 text-rose-400 px-2.5 py-1 rounded border border-rose-500/30 font-bold">脱落</span>' : '<span class="text-xs bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded border border-emerald-500/30 font-bold">生存</span>'}
+                        </div>
+                        <span class="font-mono font-black text-amber-300 tracking-widest text-xl">${p.word.join('')}</span>
+                    `;
+                    wordsList.appendChild(div);
+                });
+
+                const hostCtrl = document.getElementById('gameOverHostControls');
+                const clientMsg = document.getElementById('gameOverClientMsg');
+
+                if (isHostUser) {
+                    hostCtrl.classList.remove('hidden');
+                    clientMsg.classList.add('hidden');
+                } else {
+                    hostCtrl.classList.add('hidden');
+                    clientMsg.classList.remove('hidden');
+                }
+            }
+        }
+
+        function renderActionLogs() {
+            const logList = document.getElementById('actionLogList');
+            if (!roomData.logs || roomData.logs.length === 0) {
+                logList.innerHTML = '<div class="text-slate-500 text-center py-1">ログはまだありません</div>';
+                return;
+            }
+
+            logList.innerHTML = '';
+            roomData.logs.slice(0, 5).forEach((logText, idx) => {
+                const div = document.createElement('div');
+                div.className = `flex items-center gap-2 ${idx === 0 ? 'text-amber-300 font-bold' : 'text-slate-400'}`;
+                div.innerHTML = `
+                    <span class="text-[10px] text-slate-600 font-mono">●</span>
+                    <span>${escapeHtml(logText)}</span>
+                `;
+                logList.appendChild(div);
+            });
+        }
+
+        // SETUP LOGIC
+        window.switchKanaGroup = (group) => {
+            playSound('tap');
+            currentSetupGroup = group;
+            ['normal', 'daku', 'handaku', 'small'].forEach(g => {
+                const btn = document.getElementById(`mod${g.charAt(0).toUpperCase() + g.slice(1)}Btn`);
+                if (btn) {
+                    btn.className = (g === group) ? "flex-1 py-2 rounded-lg transition bg-sky-600 text-white" : "flex-1 py-2 rounded-lg transition text-slate-400 hover:text-white";
+                }
+            });
+            renderSetupKanaGrid();
+        };
+
+        function renderWordSlots() {
+            const container = document.getElementById('wordSlotsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            for (let i = 0; i < MAX_SLOTS; i++) {
+                const slot = document.createElement('div');
+                const char = mySelectedWord[i] || '';
+                slot.className = `w-8 h-10 sm:w-11 sm:h-12 rounded-xl flex items-center justify-center font-black text-lg sm:text-xl border-2 transition flex-shrink-0 ${
+                    char ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-md shadow-sky-500/20' : 'bg-slate-900 border-slate-800 text-slate-700'
+                }`;
+                slot.innerText = char;
+                container.appendChild(slot);
+            }
+
+            const submitBtn = document.getElementById('submitWordBtn');
+            if (mySelectedWord.length >= 1 && mySelectedWord.length <= MAX_SLOTS) {
+                submitBtn.disabled = false;
+                submitBtn.className = "w-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-extrabold text-xl py-4 rounded-xl shadow-lg transition transform active:scale-95 cursor-pointer";
+                submitBtn.innerText = `この単語 (${mySelectedWord.length}文字) で決定する！`;
+            } else {
+                submitBtn.disabled = true;
+                submitBtn.className = "w-full bg-slate-800 text-slate-500 font-extrabold text-xl py-4 rounded-xl transition cursor-not-allowed";
+                submitBtn.innerText = "1文字以上選択してください";
+            }
+        }
+
+        function renderSetupKanaGrid() {
+            const grid = document.getElementById('setupKanaGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            let bank = KANA_NORMAL;
+            if (currentSetupGroup === 'daku') bank = KANA_DAKU;
+            if (currentSetupGroup === 'handaku') bank = KANA_HANDAKU;
+            if (currentSetupGroup === 'small') bank = KANA_SMALL;
+
+            bank.forEach(char => {
+                const btn = document.createElement('button');
+                btn.className = "kana-btn bg-slate-900 border border-slate-800 text-slate-200 hover:bg-sky-600/30 hover:border-sky-500/50 hover:text-white";
+                btn.innerText = char;
+                btn.onclick = () => {
+                    if (mySelectedWord.length < MAX_SLOTS) {
+                        playSound('tap');
+                        mySelectedWord.push(char);
+                        renderWordSlots();
+                    }
+                };
+                grid.appendChild(btn);
+            });
+        }
+
+        window.clearSetupWord = () => {
+            playSound('tap');
+            mySelectedWord = [];
+            renderWordSlots();
+        };
+
+        window.submitTargetWord = () => {
+            playSound('tap');
+            if (mySelectedWord.length < 1 || mySelectedWord.length > MAX_SLOTS) return;
+
+            if (isHost) {
+                roomData.players[myId].word = mySelectedWord;
+                roomData.players[myId].isReady = true;
+                const allReady = Object.values(roomData.players).every(p => p.isReady);
+                if (allReady) {
+                    roomData.status = 'BATTLE';
+                    // 親（スタートプレイヤー）をランダムに選出
+                    roomData.currentTurnIndex = Math.floor(Math.random() * roomData.turnOrder.length);
+                    const startPlayer = roomData.players[roomData.turnOrder[roomData.currentTurnIndex]];
+                    addLog(`対戦スタート！ 最初の親は [ ${startPlayer ? startPlayer.name : ''} ] です！`);
+                }
+                broadcastState();
+            } else {
+                hostConn.send({ type: 'SUBMIT_WORD', id: myId, word: mySelectedWord });
+                roomData.players[myId].isReady = true;
+                renderRoomState();
+            }
+        };
+
+        // BATTLE LOGIC
+        function renderBattleKanaGrid(isMyTurn) {
+            const grid = document.getElementById('battleKanaGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            const calledSet = new Set(roomData.calledLetters || []);
+            const myPlayer = roomData.players[myId];
+            
+            const myWordSet = new Set();
+            if (myPlayer) {
+                myPlayer.word.forEach(char => {
+                    getRelatedKanaList(char).forEach(k => myWordSet.add(k));
+                });
+            }
+
+            KANA_NORMAL.forEach(char => {
+                const btn = document.createElement('button');
+                const isDestroyed = calledSet.has(char);
+                const isMyLetter = myWordSet.has(char);
+
+                let btnStyle = "kana-btn bg-slate-900 border border-slate-800 text-slate-200 ";
+
+                if (isDestroyed) {
+                    btnStyle += "kana-destroyed ";
+                } else if (isMyTurn) {
+                    btnStyle += "hover:bg-amber-500/20 hover:border-amber-500/60 hover:text-white cursor-pointer active:scale-90 ";
+                } else {
+                    btnStyle += "opacity-80 cursor-not-allowed ";
+                }
+
+                if (isMyLetter && !isDestroyed) {
+                    btnStyle += "kana-my-word ";
+                }
+
+                btn.className = btnStyle;
+                btn.innerText = char;
+
+                if (isMyTurn && !isDestroyed) {
+                    btn.onclick = () => attackLetter(char);
+                }
+
+                grid.appendChild(btn);
+            });
+        }
+
+        // 単語状況のUI改善（大きめのサイズとスクロール可能なデザインに変更）
+        function renderBattlePlayers() {
+            const container = document.getElementById('battlePlayersContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            Object.values(roomData.players).forEach(p => {
+                const card = document.createElement('div');
+                const isMe = p.id === myId;
+                const isTurn = roomData.turnOrder[roomData.currentTurnIndex] === p.id;
+
+                card.className = `glass-panel p-4 sm:p-5 rounded-2xl border flex flex-col justify-between space-y-3 transition ${
+                    !p.isAlive ? 'opacity-40 bg-slate-950 border-slate-900' :
+                    isTurn ? 'border-amber-500 shadow-xl shadow-amber-500/10 ring-1 ring-amber-500/30' : 'border-slate-800'
+                }`;
+
+                let slotsHtml = '';
+                for (let i = 0; i < MAX_SLOTS; i++) {
+                    const isRevealed = p.revealedIndices.includes(i);
+                    const char = p.word[i];
+
+                    if (isMe) {
+                        if (char) {
+                            if (isRevealed) {
+                                slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-rose-500/20 border-2 border-rose-500/60 text-rose-300 font-black flex items-center justify-center text-lg sm:text-2xl flex-shrink-0">${char}</span>`;
+                            } else {
+                                slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-sky-500/20 border-2 border-sky-400/60 text-sky-200 font-black flex items-center justify-center text-lg sm:text-2xl flex-shrink-0">${char}</span>`;
+                            }
+                        } else {
+                            slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-slate-950/60 border border-slate-800/80 text-slate-800 font-bold flex items-center justify-center text-sm flex-shrink-0">-</span>`;
+                        }
+                    } else {
+                        if (isRevealed && char) {
+                            slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-rose-500/20 border-2 border-rose-500/60 text-rose-300 font-black flex items-center justify-center text-lg sm:text-2xl flex-shrink-0">${char}</span>`;
+                        } else {
+                            slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-slate-900 border border-slate-800 text-slate-600 font-bold flex items-center justify-center text-base sm:text-lg flex-shrink-0">?</span>`;
+                        }
+                    }
+                }
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-extrabold text-base sm:text-lg text-slate-100 truncate max-w-[180px]">
+                                ${escapeHtml(p.name)} ${isMe ? '<span class="text-xs text-sky-400 font-bold">(自分)</span>' : ''}
+                            </span>
+                            ${isTurn ? '<span class="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-bold">親</span>' : ''}
+                        </div>
+                        ${!p.isAlive ? '<span class="text-xs font-bold text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded border border-rose-500/20">脱落</span>' : ''}
+                    </div>
+                    <div class="flex justify-start sm:justify-center items-center gap-1.5 sm:gap-2 my-1 overflow-x-auto pb-2 pt-1">
+                        ${slotsHtml}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function attackLetter(letter) {
+            const currentTurnPlayerId = roomData.turnOrder[roomData.currentTurnIndex];
+            if (currentTurnPlayerId !== myId || roomData.pendingCall) return;
+
+            if (isHost) {
+                processAttack(letter);
+            } else {
+                hostConn.send({ type: 'ATTACK_LETTER', letter });
+            }
+        }
+
+        function processAttack(letter) {
+            playSound('hit');
+
+            const currentTurnPlayer = roomData.players[roomData.turnOrder[roomData.currentTurnIndex]];
+            const attackerName = currentTurnPlayer ? currentTurnPlayer.name : '不明';
+
+            roomData.calledLetters.push(letter);
+            addLog(`${attackerName} が「 ${letter} 」をコール！`);
+
+            const targetGroup = getRelatedKanaList(letter);
+
+            Object.keys(roomData.players).forEach(pId => {
+                const p = roomData.players[pId];
+                if (!p.isAlive) return;
+
+                p.word.forEach((char, idx) => {
+                    if (targetGroup.includes(char) && !p.revealedIndices.includes(idx)) {
+                        p.revealedIndices.push(idx);
+                    }
+                });
+
+                const allWordLettersRevealed = p.word.length > 0 && p.word.every((_, idx) => p.revealedIndices.includes(idx));
+                if (allWordLettersRevealed) {
+                    p.isAlive = false;
+                    addLog(`💥 ${p.name} のすべての文字が開いて脱落！`);
+                }
+            });
+
+            checkGameEndAndNextTurn();
+        }
+
+        function sendDirectCall(targetId) {
+            playSound('tap');
+            const target = roomData.players[targetId];
+            if (!target) return;
+
+            if (!confirm(`「${target.name}」のお題を口頭等でコールしましたか？\n相手に判定を要請します。`)) return;
+
+            if (isHost) {
+                processDirectCall(myId, targetId);
+            } else {
+                hostConn.send({ type: 'DIRECT_CALL', attackerId: myId, targetId: targetId });
+            }
+        }
+
+        function processDirectCall(attackerId, targetId) {
+            const attacker = roomData.players[attackerId];
+            const target = roomData.players[targetId];
+            roomData.pendingCall = { attackerId, targetId };
+            addLog(`🎯 ${attacker ? attacker.name : ''} が ${target ? target.name : ''} を指名アタック！`);
+            broadcastState();
+        }
+
+        function answerCallJudge(isCorrect) {
+            playSound('tap');
+            if (isHost) {
+                processCallAnswer(myId, isCorrect);
+            } else {
+                hostConn.send({ type: 'ANSWER_CALL', targetId: myId, isCorrect: isCorrect });
+            }
+        }
+
+        function processCallAnswer(targetId, isCorrect) {
+            const target = roomData.players[targetId];
+            const attacker = roomData.players[roomData.pendingCall ? roomData.pendingCall.attackerId : ''];
+            roomData.pendingCall = null;
+
+            if (isCorrect) {
+                playSound('eliminate');
+                target.isAlive = false;
+                target.revealedIndices = target.word.map((_, idx) => idx);
+                addLog(`⭕ 指名アタック成功！ ${target ? target.name : ''} は脱落！`);
+            } else {
+                addLog(`❌ ${attacker ? attacker.name : ''} の指名アタックは不正解！`);
+            }
+
+            checkGameEndAndNextTurn();
+        }
+
+        function checkGameEndAndNextTurn() {
+            const alivePlayers = Object.values(roomData.players).filter(p => p.isAlive);
+
+            if (alivePlayers.length <= 1) {
+                roomData.status = 'GAMEOVER';
+                roomData.winnerId = alivePlayers.length === 1 ? alivePlayers[0].id : myId;
+                const winner = roomData.players[roomData.winnerId];
+                addLog(`🏆 ゲーム終了！勝者: ${winner ? winner.name : ''}`);
+            } else {
+                let nextTurnIdx = (roomData.currentTurnIndex + 1) % roomData.turnOrder.length;
+                while (!roomData.players[roomData.turnOrder[nextTurnIdx]].isAlive) {
+                    nextTurnIdx = (nextTurnIdx + 1) % roomData.turnOrder.length;
+                }
+                roomData.currentTurnIndex = nextTurnIdx;
+            }
+
+            broadcastState();
+        }
+
+        window.startSetupPhase = () => {
+            playSound('tap');
+            if (!isHost) return;
+
+            const playersKeys = Object.keys(roomData.players);
+            if (playersKeys.length < 1) {
+                alert("対戦には2人以上が必要です");
+                return;
+            }
+
+            roomData.status = 'SETUP';
+            roomData.calledLetters = [];
+            roomData.pendingCall = null;
+            roomData.logs = [];
+            Object.keys(roomData.players).forEach(id => {
+                roomData.players[id].word = [];
+                roomData.players[id].revealedIndices = [];
+                roomData.players[id].isAlive = true;
+                roomData.players[id].isReady = false;
+            });
+            mySelectedWord = [];
+
+            broadcastState();
+        };
+
+        window.restartGame = () => {
+            playSound('tap');
+            if (!isHost) return;
+            resetGameToLobby();
+        };
+
+        function resetGameToLobby() {
+            roomData.status = 'LOBBY';
+            roomData.calledLetters = [];
+            roomData.pendingCall = null;
+            roomData.logs = [];
+            Object.keys(roomData.players).forEach(id => {
+                roomData.players[id].word = [];
+                roomData.players[id].revealedIndices = [];
+                roomData.players[id].isAlive = true;
+                roomData.players[id].isReady = false;
+            });
+            mySelectedWord = [];
+            broadcastState();
+        }
+
+        window.toggleSound = () => {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('soundIcon');
+            if (soundEnabled) icon.className = "fa-solid fa-volume-high";
+            else icon.className = "fa-solid fa-volume-xmark text-rose-400";
+        };
+
+        window.copyRoomCode = () => {
+            if (!roomCode) return;
+            navigator.clipboard.writeText(roomCode);
+            alert(`合言葉 [ ${roomCode} ] をコピーしました！`);
+        };
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        // 初期ロード時に五十音表を必ず初期化・描画
+        document.addEventListener('DOMContentLoaded', () => {
+            renderSetupKanaGrid();
+            renderWordSlots();
+        });
+    </script>
+</body>
+</html>
