@@ -226,7 +226,7 @@
 
                 <!-- Info Message -->
                 <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-800 text-center text-sm text-slate-300">
-                    お題の文字数: <strong class="text-amber-400 font-bold text-base">1〜7文字（自由指定・相手には隠されます）</strong>
+                    お題の文字数: <strong class="text-amber-400 font-bold text-base">1〜10文字（自由指定・相手には隠されます）</strong>
                 </div>
 
                 <!-- Players List -->
@@ -258,15 +258,15 @@
                 <div class="text-center space-y-1">
                     <span class="text-xs font-bold text-amber-400 tracking-wider uppercase">SETUP PHASE</span>
                     <h3 class="text-2xl font-black text-white">あなたの【秘密の単語】を決めてください</h3>
-                    <p class="text-xs sm:text-sm text-slate-400">あいうえお表から <span class="text-sky-400 font-bold">1〜7文字</span> の単語を作成！（文字数は相手に隠されます）</p>
+                    <p class="text-xs sm:text-sm text-slate-400">あいうえお表から <span class="text-sky-400 font-bold">1〜10文字</span> の単語を作成！（文字数は相手に隠されます）</p>
                 </div>
 
                 <!-- Word Display Slots -->
                 <div class="flex justify-center items-center space-x-2 py-2 overflow-x-auto">
-                    <div id="wordSlotsContainer" class="flex space-x-2">
+                    <div id="wordSlotsContainer" class="flex space-x-1.5 sm:space-x-2 overflow-x-auto py-1 max-w-full">
                         <!-- Populated by JS -->
                     </div>
-                    <button onclick="clearSetupWord()" class="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 flex items-center justify-center text-lg transition border border-slate-700 ml-2 flex-shrink-0">
+                    <button onclick="clearSetupWord()" class="w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 flex items-center justify-center text-lg transition border border-slate-700 ml-1 flex-shrink-0">
                         <i class="fa-solid fa-rotate-left"></i>
                     </button>
                 </div>
@@ -305,7 +305,7 @@
                         ?
                     </div>
                     <div>
-                        <span class="text-xs text-slate-400 font-bold block uppercase tracking-wider">現在のターン</span>
+                        <span class="text-xs text-slate-400 font-bold block uppercase tracking-wider">現在のターン (親)</span>
                         <h4 id="turnPlayerName" class="text-lg md:text-xl font-black text-white">----</h4>
                     </div>
                 </div>
@@ -328,13 +328,13 @@
                 </div>
             </div>
 
-            <!-- Players Cards Grid -->
+            <!-- Players Cards Grid (拡大対応版UI) -->
             <div class="space-y-2">
                 <div class="flex justify-between items-center text-xs font-bold text-slate-400 px-1">
-                    <span>各プレイヤーの単語状況 (一律7マス表示)</span>
+                    <span>各プレイヤーの単語状況 (一律10マス表示)</span>
                 </div>
 
-                <div id="battlePlayersContainer" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div id="battlePlayersContainer" class="grid grid-cols-1 gap-3">
                     <!-- Populated dynamically -->
                 </div>
             </div>
@@ -427,8 +427,8 @@
 
     <!-- GAME ENGINE & PEERJS ONLINE SCRIPT -->
     <script>
-        const PREFIX = "aiueo-battle-v8-";
-        const MAX_SLOTS = 7;
+        const PREFIX = "aiueo-battle-v9-";
+        const MAX_SLOTS = 10; // 最大文字数を10文字に変更
 
         // 五十音定義
         const KANA_NORMAL = [
@@ -704,8 +704,10 @@
                 const allReady = Object.values(roomData.players).every(p => p.isReady);
                 if (allReady) {
                     roomData.status = 'BATTLE';
-                    roomData.currentTurnIndex = 0;
-                    addLog("対戦がスタートしました！");
+                    // 親（スタートプレイヤー）をランダムに選出
+                    roomData.currentTurnIndex = Math.floor(Math.random() * roomData.turnOrder.length);
+                    const startPlayer = roomData.players[roomData.turnOrder[roomData.currentTurnIndex]];
+                    addLog(`対戦スタート！ 最初の親は [ ${startPlayer ? startPlayer.name : ''} ] です！`);
                 }
                 broadcastState();
             } else if (data.type === 'ATTACK_LETTER') {
@@ -936,12 +938,13 @@
 
         function renderWordSlots() {
             const container = document.getElementById('wordSlotsContainer');
+            if (!container) return;
             container.innerHTML = '';
 
             for (let i = 0; i < MAX_SLOTS; i++) {
                 const slot = document.createElement('div');
                 const char = mySelectedWord[i] || '';
-                slot.className = `w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl border-2 transition ${
+                slot.className = `w-8 h-10 sm:w-11 sm:h-12 rounded-xl flex items-center justify-center font-black text-lg sm:text-xl border-2 transition flex-shrink-0 ${
                     char ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-md shadow-sky-500/20' : 'bg-slate-900 border-slate-800 text-slate-700'
                 }`;
                 slot.innerText = char;
@@ -1001,8 +1004,10 @@
                 const allReady = Object.values(roomData.players).every(p => p.isReady);
                 if (allReady) {
                     roomData.status = 'BATTLE';
-                    roomData.currentTurnIndex = 0;
-                    addLog("対戦がスタートしました！");
+                    // 親（スタートプレイヤー）をランダムに選出
+                    roomData.currentTurnIndex = Math.floor(Math.random() * roomData.turnOrder.length);
+                    const startPlayer = roomData.players[roomData.turnOrder[roomData.currentTurnIndex]];
+                    addLog(`対戦スタート！ 最初の親は [ ${startPlayer ? startPlayer.name : ''} ] です！`);
                 }
                 broadcastState();
             } else {
@@ -1058,6 +1063,7 @@
             });
         }
 
+        // 単語状況のUI改善（大きめのサイズとスクロール可能なデザインに変更）
         function renderBattlePlayers() {
             const container = document.getElementById('battlePlayersContainer');
             if (!container) return;
@@ -1068,9 +1074,9 @@
                 const isMe = p.id === myId;
                 const isTurn = roomData.turnOrder[roomData.currentTurnIndex] === p.id;
 
-                card.className = `glass-panel p-4 rounded-xl border flex flex-col justify-between space-y-3 transition ${
+                card.className = `glass-panel p-4 sm:p-5 rounded-2xl border flex flex-col justify-between space-y-3 transition ${
                     !p.isAlive ? 'opacity-40 bg-slate-950 border-slate-900' :
-                    isTurn ? 'border-amber-500/80 shadow-lg shadow-amber-500/10' : 'border-slate-800'
+                    isTurn ? 'border-amber-500 shadow-xl shadow-amber-500/10 ring-1 ring-amber-500/30' : 'border-slate-800'
                 }`;
 
                 let slotsHtml = '';
@@ -1081,30 +1087,33 @@
                     if (isMe) {
                         if (char) {
                             if (isRevealed) {
-                                slotsHtml += `<span class="w-8 h-10 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-black flex items-center justify-center text-base">${char}</span>`;
+                                slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-rose-500/20 border-2 border-rose-500/60 text-rose-300 font-black flex items-center justify-center text-lg sm:text-2xl flex-shrink-0">${char}</span>`;
                             } else {
-                                slotsHtml += `<span class="w-8 h-10 rounded-lg bg-sky-500/20 border border-sky-400/50 text-sky-200 font-black flex items-center justify-center text-base">${char}</span>`;
+                                slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-sky-500/20 border-2 border-sky-400/60 text-sky-200 font-black flex items-center justify-center text-lg sm:text-2xl flex-shrink-0">${char}</span>`;
                             }
                         } else {
-                            slotsHtml += `<span class="w-8 h-10 rounded-lg bg-slate-950 border border-slate-900 text-slate-800 font-bold flex items-center justify-center text-xs">-</span>`;
+                            slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-slate-950/60 border border-slate-800/80 text-slate-800 font-bold flex items-center justify-center text-sm flex-shrink-0">-</span>`;
                         }
                     } else {
                         if (isRevealed && char) {
-                            slotsHtml += `<span class="w-8 h-10 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-black flex items-center justify-center text-sm">${char}</span>`;
+                            slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-rose-500/20 border-2 border-rose-500/60 text-rose-300 font-black flex items-center justify-center text-lg sm:text-2xl flex-shrink-0">${char}</span>`;
                         } else {
-                            slotsHtml += `<span class="w-8 h-10 rounded-lg bg-slate-900 border border-slate-800 text-slate-600 font-bold flex items-center justify-center text-sm">?</span>`;
+                            slotsHtml += `<span class="w-9 h-12 sm:w-11 sm:h-14 rounded-xl bg-slate-900 border border-slate-800 text-slate-600 font-bold flex items-center justify-center text-base sm:text-lg flex-shrink-0">?</span>`;
                         }
                     }
                 }
 
                 card.innerHTML = `
-                    <div class="flex justify-between items-center border-b border-slate-800/80 pb-2">
-                        <span class="font-bold text-sm text-slate-200 truncate max-w-[140px]">
-                            ${escapeHtml(p.name)} ${isMe ? '(自分)' : ''}
-                        </span>
-                        ${!p.isAlive ? '<span class="text-xs font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">脱落</span>' : ''}
+                    <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-extrabold text-base sm:text-lg text-slate-100 truncate max-w-[180px]">
+                                ${escapeHtml(p.name)} ${isMe ? '<span class="text-xs text-sky-400 font-bold">(自分)</span>' : ''}
+                            </span>
+                            ${isTurn ? '<span class="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-bold">親</span>' : ''}
+                        </div>
+                        ${!p.isAlive ? '<span class="text-xs font-bold text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded border border-rose-500/20">脱落</span>' : ''}
                     </div>
-                    <div class="flex justify-center items-center gap-1.5 my-1 overflow-x-auto">
+                    <div class="flex justify-start sm:justify-center items-center gap-1.5 sm:gap-2 my-1 overflow-x-auto pb-2 pt-1">
                         ${slotsHtml}
                     </div>
                 `;
